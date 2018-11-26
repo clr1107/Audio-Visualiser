@@ -24,33 +24,29 @@ function windowResized() {
 function loadSong() {
   var videoID = $('#input-youtube-url').val();
   var btn = $('#btn-play');
-  var percentage = $('#loaded-percentage');
-  if(song != null) song.stop();
-  
-  song = loadSound(videoID, function() {
-    btn.attr('disabled', false)
-  })
-  ;
+  if(song != null) stopSong();
+  song = loadSound(videoID);
+
   song.onended(function(a) {
-    btn.attr('disabled', true)
-    console.log(a);
+    var btn = $('#btn-play');
+
+    btn.text('Play');
+    btn.removeClass('btn-danger');
+    btn.addClass('btn-success');
+
+    btn.attr('disabled', a._paused);
   });
+
   fft = new p5.FFT(0.85, 64);
 }
 
 function togglePlayPause() {
   if(song == null) return;
 
-  var btn = $('#btn-play');
-  btn.toggleClass('btn-danger', 'btn-success');
-
-  if(btn.hasClass('btn-danger')) { // should say pause && now needs to play.   
-    btn.text('Pause');
-    song.play();
-    song.amp(0.05);
-  } else { // should say play && now needs to pause.
-    btn.text('Play');
-    song.pause();
+  if($('#btn-play').hasClass('btn-success')) {
+    playSong();
+  } else {
+    pauseSong();
   }
 }
 
@@ -60,12 +56,12 @@ function draw() {
   if(fft == null) {
     textAlign(CENTER, CENTER);
     displayText("Choose a song!", windowWidth / 2, windowHeight / 2, 45);
+
     textAlign(LEFT, CENTER);
     return;
   }
 
   displayText(currentTime(), 20, 50, 30);
-
   var analysis = fft.analyze();
   var energy = fft.getEnergy("bass");
 
@@ -74,6 +70,7 @@ function draw() {
     var amplitude = analysis[i];
 
     if(amplitude == 0) continue;
+
     var x = (i + 1) * (windowWidth / length);
     var y2 =  windowHeight - (amplitude * (windowHeight / 255));
 
@@ -83,17 +80,50 @@ function draw() {
 }
 
 function applyStroke(energy) {
-  var green = (energy - 170);
-  var blue = (energy - 85);
+  var red = 255;
+  var green = 0;
+  var blue = 0;
 
-  green = green < 0 ? 0 : green % 256;
-  blue = blue < 0 ? 0 : blue % 256;
+  var value = energy * 6;
+  green += value;
+  
+  if(green > 255) {
+    green = 255;
+    value = value - 255;
 
-  stroke(
-    /* red */   energy,
-    /* green */ green,
-    /* blue */  blue
-  );
+    red -= value;
+  }
+
+  if(red < 0) {
+    red = 0;
+    value = value - 255;
+
+    blue += value;
+  }
+
+  if(blue > 255) {
+    blue = 255;
+    value = value - 255;
+
+    green -= value;
+  }
+
+  if(green < 0) {
+    green = 0;
+    value -= 255;
+
+    red += value;
+  }
+
+  if(red > 255) {
+    red = 255;
+    value -= 255;
+
+    blue -= value;
+  }
+
+
+  stroke(red, green, blue);
 }
 
 function currentTime() {
@@ -117,21 +147,32 @@ function displayText(str, x, y, size) {
   strokeWeight(4);
 }
 
+function stopSong() {
+  if(song == null) return;
+
+  song.stop();
+  song = null;
+}
+
+function pauseSong() {
+  if(song == null) return;
+
+  song.pause();
+}
+
+function playSong() {
+  if(song == null) return;
+
+  song.play();
+  song.amp(0.05);
+
+  var btn = $('#btn-play');
+  btn.text('Pause');
+  btn.removeClass('btn-success');
+  btn.addClass('btn-danger');
+  btn.attr('disabled', false);
+}
+
 function getMeasurements() {
   return [windowWidth, windowHeight];
 }
-
-function error(str) {
-  console.log("new error");
-  var alert = $("<div role=\"alert\" class=\"alert alert-info div-top-border-1\">" + str + "</div>").appendTo('#alerts');
-
-  setTimeout(function() {
-    $('#alerts').remove(alert);
-  }, 3000);
-}
-
-
-
-
-
-
