@@ -3,131 +3,88 @@ var fft;
 var font;
 
 $(document).ready(function() {
-  $('#btn-load').click(loadSong);
-  $('#btn-play').click(togglePlayPause);
+  $('#btn-load').click(loadSongEvent);
+  $('#btn-play').attr('disabled', true);
+  $('#btn-play').click(playPauseSongEvent);
 });
 
 function setup() {
-	var measurements = getMeasurements();
+  createCanvas(windowWidth, windowHeight).parent('#canvas');
 
-  createCanvas(measurements[0], measurements[1]).parent('#canvas');
   strokeWeight(4);
-
+  fill('#FFFFFF');
   font = loadFont('copse.ttf');
 }
 
 function windowResized() {
-	var measurements = getMeasurements();
-  resizeCanvas(measurements[0], measurements[1]);
+  resizeCanvas(windowWidth, windowHeight);
 }
 
-function loadSong() {
-  var videoID = $('#input-youtube-url').val();
+function managePlayButton(disable = false) {
   var btn = $('#btn-play');
-  if(song != null) stopSong();
-  song = loadSound(videoID);
-
-  song.onended(function(a) {
-    var btn = $('#btn-play');
-
-    btn.text('Play');
+  
+  if(disable) {
     btn.removeClass('btn-danger');
     btn.addClass('btn-success');
+    btn.text('Play');
+    btn.attr('disabled', true);
 
-    btn.attr('disabled', a._paused);
-  });
-
-  fft = new p5.FFT(0.85, 64);
-}
-
-function togglePlayPause() {
-  if(song == null) return;
-
-  if($('#btn-play').hasClass('btn-success')) {
-    playSong();
-  } else {
-    pauseSong();
-  }
-}
-
-function draw() {
-  background(0);
-
-  if(fft == null) {
-    textAlign(CENTER, CENTER);
-    displayText("Choose a song!", windowWidth / 2, windowHeight / 2, 45);
-
-    textAlign(LEFT, CENTER);
     return;
   }
 
-  displayText(currentTime(), 20, 50, 30);
-  var analysis = fft.analyze();
-  var energy = fft.getEnergy("bass");
-
-  for(var i = 0; i < analysis.length; ++i) {
-    var length = analysis.length;
-    var amplitude = analysis[i];
-
-    if(amplitude == 0) continue;
-
-    var x = (i + 1) * (windowWidth / length);
-    var y2 =  windowHeight - (amplitude * (windowHeight / 255));
-
-    applyStroke(energy);
-    line(x, windowHeight, x, y2);
+  var playing = song.isPlaying();
+    
+  if(playing) {
+    btn.text('Pause');
+    btn.removeClass('btn-success');
+    btn.addClass('btn-danger');
+  } else {
+    btn.text('Play');
+    btn.removeClass('btn-danger');
+    btn.addClass('btn-success');
   }
 }
 
-function applyStroke(energy) {
-  var red = 255;
-  var green = 0;
-  var blue = 0;
+function loadSongEvent() {
+  var url = $('#input-url').val();
 
-  var value = energy * 6;
-  green += value;
-  
-  if(green > 255) {
-    green = 255;
-    value = value - 255;
-
-    red -= value;
+  if(songLoaded()) {
+    song.stop();
   }
 
-  if(red < 0) {
-    red = 0;
-    value = value - 255;
+  song = loadSound(url, function() {
+    $('#btn-play').attr('disabled', false);
+  });
 
-    blue += value;
+  song.onended(function(a) {
+    managePlayButton(!a._paused);
+
+    if(!a._paused) {
+      song = null;
+      fft = null;
+      managePlayButton(true);
+    }
+  });
+
+  song.amp(0.05);
+  fft = new p5.FFT(0.84, 64);
+}
+
+function playPauseSongEvent() {
+  playing = song.isPlaying();
+
+  if(playing) {
+    song.pause();
+  } else {
+    song.play();
+    $('html, body').animate({scrollTop: $('#canvas').offset().top}, 'slow');
   }
 
-  if(blue > 255) {
-    blue = 255;
-    value = value - 255;
-
-    green -= value;
-  }
-
-  if(green < 0) {
-    green = 0;
-    value -= 255;
-
-    red += value;
-  }
-
-  if(red > 255) {
-    red = 255;
-    value -= 255;
-
-    blue -= value;
-  }
-
-
-  stroke(red, green, blue);
+  managePlayButton();
 }
 
 function currentTime() {
-  if(song == null) return 0;
+  if(!songLoaded()) return 0;
   var time = song.currentTime();
 
   minutes = Math.floor(time / 60);
@@ -137,8 +94,6 @@ function currentTime() {
 }
 
 function displayText(str, x, y, size) {
-  fill('#FFFFFF');
-  stroke('#FFFFFF');
   strokeWeight(1);
 
   textFont(font, size);
@@ -147,32 +102,47 @@ function displayText(str, x, y, size) {
   strokeWeight(4);
 }
 
-function stopSong() {
-  if(song == null) return;
-
-  song.stop();
-  song = null;
+function songLoaded() {
+  return song != null && fft != null;
 }
 
-function pauseSong() {
-  if(song == null) return;
+function draw() {
+  background(0);
 
-  song.pause();
+  if(!songLoaded()) {
+    textAlign(CENTER, CENTER);
+    displayText("Choose a song!", windowWidth / 2, windowHeight / 2, 45);
+    textAlign(LEFT, CENTER);
+
+    return;
+  }
+
+  displayText(currentTime(), 20, 50, 30);
+  applyStroke(fft.getEnergy("bass"));
+
+  var analysis = fft.analyze();
+  for(var i = 0; i < analysis.length; ++i) {
+    var amplitude = analysis[i];
+    if(amplitude == 0) continue;
+
+    var x = (i + 1) * (windowWidth / analysis.length);
+    var y2 =  windowHeight - (amplitude * (windowHeight / 255));
+
+    line(x, windowHeight, x, y2);
+  }
 }
 
-function playSong() {
-  if(song == null) return;
+function applyStroke(energy) {
+  colorMode(HSB);
 
-  song.play();
-  song.amp(0.05);
+  let hue = 1.4117647059 * energy;
+  stroke(hue, 100, 100, 1);
 
-  var btn = $('#btn-play');
-  btn.text('Pause');
-  btn.removeClass('btn-success');
-  btn.addClass('btn-danger');
-  btn.attr('disabled', false);
-}
+  /*
+  This is a shortcut method using the HSB (Hue, Saturation, Brightness) colour mode
+  compared to the previous method of making a colour selector algorithm...
 
-function getMeasurements() {
-  return [windowWidth, windowHeight];
+  The factor 1.41176... is calculated by doing (360 / 255) as 360 is the maximum H value
+  for HSB and 255 is the maximum energy value.
+  */
 }
